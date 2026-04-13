@@ -4,20 +4,19 @@
 
 它只负责协议调用，不负责保存业务状态。`token`、`baseUrl`、`cursor`、会话和聊天记录都需要由你的应用自己保存。
 
-通过微信的ClawBot,实现了微信自定义机器人的功能
+通过微信的 ClawBot 实现微信自定义机器人的接入能力。
+
+## 安装
+
+```bash
+npm i wx-link
+```
 
 ## 文档
 
 [在线文档](https://yhsrzbg.github.io/wx-link-doc/)
 
 ## Quick Start
-
-先安装依赖并构建：
-
-```bash
-npm install
-npm run build
-```
 
 ```ts
 import { loginWithQR, WxLinkClient } from "wx-link";

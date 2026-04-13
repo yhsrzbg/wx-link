@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Stateless TypeScript core SDK for WeChat iLink bot login, polling, and messaging.",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -15,7 +19,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup src/index.ts --format esm --dts --clean --minify --splitting false --target node22 --platform node --out-dir dist && node ./scripts/obfuscate.mjs",
+    "prepublishOnly": "npm run build",
     "smoke": "node -e \"import('./dist/index.js').then((m) => console.log(Object.keys(m).join(',')))\""
   },
   "keywords": [
@@ -24,9 +29,22 @@
     "sdk",
     "ilink"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yhsrzbg/wx-link.git"
+  },
+  "homepage": "https://github.com/yhsrzbg/wx-link#readme",
+  "bugs": {
+    "url": "https://github.com/yhsrzbg/wx-link/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^24.5.2",
+    "javascript-obfuscator": "^5.4.1",
+    "tsup": "^8.5.1",
     "typescript": "^5.8.2"
   }
 }
