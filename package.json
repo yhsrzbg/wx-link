@@ -1,6 +1,6 @@
 {
   "name": "wx-link",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Stateless TypeScript core SDK for WeChat iLink bot login, polling, and messaging.",
   "type": "module",
   "files": [
@@ -33,7 +33,7 @@
     "type": "git",
     "url": "git+https://github.com/yhsrzbg/wx-link.git"
   },
-  "homepage": "https://github.com/yhsrzbg/wx-link#readme",
+  "homepage": "https://yhsrzbg.github.io/wx-link-doc/",
   "bugs": {
     "url": "https://github.com/yhsrzbg/wx-link/issues"
   },
