@@ -20,6 +20,7 @@ export interface LoggerLike {
 
 export interface BaseInfo {
   channel_version?: string;
+  bot_agent?: string;
 }
 
 export interface ClientOptions {
@@ -28,6 +29,12 @@ export interface ClientOptions {
   cdnBaseUrl?: string;
   appId?: string;
   channelVersion?: string;
+  /**
+   * UA-style upstream-app identifier sent as `base_info.bot_agent` on every
+   * request, e.g. `"my-app/1.2.3 (prod)"`. Sanitized via `sanitizeBotAgent`;
+   * falls back to `"wx-link"` when omitted or invalid.
+   */
+  botAgent?: string;
   routeTag?: string | number;
   fetchImpl?: FetchLike;
   logger?: LoggerLike;
@@ -45,6 +52,7 @@ export interface ApiContext {
   routeTag?: string | number;
   appId: string;
   channelVersion: string;
+  botAgent: string;
   clientVersionNumber: number;
   longPollTimeoutMs: number;
   apiTimeoutMs: number;
@@ -208,7 +216,15 @@ export interface QRCodeResponse {
 }
 
 export interface QRStatusResponse {
-  status: "wait" | "scaned" | "confirmed" | "expired" | "scaned_but_redirect";
+  status:
+    | "wait"
+    | "scaned"
+    | "confirmed"
+    | "expired"
+    | "scaned_but_redirect"
+    | "need_verifycode"
+    | "verify_code_blocked"
+    | "binded_redirect";
   bot_token?: string;
   ilink_bot_id?: string;
   baseurl?: string;
@@ -225,7 +241,16 @@ export interface LoginResult {
 
 export interface LoginCallbacks {
   onQRCode: (url: string) => void;
-  onStatusChange?: (status: "waiting" | "scanned" | "expired" | "refreshing") => void;
+  onStatusChange?: (
+    status: "waiting" | "scanned" | "expired" | "refreshing" | "need_verifycode" | "verify_code_blocked",
+  ) => void;
+  /**
+   * Called when the server challenges the scan with a pair-code
+   * (`need_verifycode`). Return the code the user reads off their phone, or
+   * `undefined` to abort. `retry` is true when a previously supplied code was
+   * rejected and the server is asking again.
+   */
+  onVerifyCode?: (info: { retry: boolean }) => Promise<string | undefined> | string | undefined;
 }
 
 export interface QrLoginSession {
@@ -236,6 +261,8 @@ export interface QrLoginSession {
   startedAt: number;
   currentApiBaseUrl: string;
   refreshCount: number;
+  /** Pair-code staged for the next poll after a `need_verifycode` challenge. */
+  pendingVerifyCode?: string;
 }
 
 export interface CreateQrLoginSessionOptions {
@@ -243,12 +270,20 @@ export interface CreateQrLoginSessionOptions {
   botType?: string;
   fetchImpl?: FetchLike;
   logger?: LoggerLike;
+  /**
+   * Most-recent local `bot_token`s (up to 10) posted on QR fetch so the server
+   * can recognize an already-bound bot and reply with `binded_redirect`
+   * instead of issuing a duplicate session.
+   */
+  localTokenList?: string[];
 }
 
 export interface PollQrLoginSessionOptions {
   session: QrLoginSession;
   fetchImpl?: FetchLike;
   logger?: LoggerLike;
+  /** Pair-code to send with this poll, answering a prior `need_verifycode`. */
+  verifyCode?: string;
 }
 
 export interface PollQrLoginSessionResult {
@@ -256,6 +291,12 @@ export interface PollQrLoginSessionResult {
   status: QRStatusResponse["status"];
   done: boolean;
   connected: boolean;
+  /**
+   * Server reported `binded_redirect`: the scanned bot is already bound to this
+   * caller, so no new credentials are issued. Treat as a successful no-op
+   * rather than a failure.
+   */
+  alreadyConnected?: boolean;
   message: string;
   botToken?: string;
   accountId?: string;

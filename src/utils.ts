@@ -133,6 +133,92 @@ export function buildClientVersion(version: string): number {
   return ((major & 0xff) << 16) | ((minor & 0xff) << 8) | (patch & 0xff);
 }
 
+/** Default `bot_agent` value used when the caller does not declare one. */
+export const DEFAULT_BOT_AGENT = "wx-link";
+
+/** Maximum length (bytes) of the sanitized `bot_agent` string. */
+const BOT_AGENT_MAX_LEN = 256;
+
+/**
+ * Sanitize a caller-supplied `botAgent` value into a wire-safe string.
+ *
+ * Grammar (UA-style):
+ *   bot_agent = product *( SP product )
+ *   product   = name "/" version [ SP "(" comment ")" ]
+ *   name      = 1*32( ALPHA / DIGIT / "_" / "." / "-" )
+ *   version   = 1*32( ALPHA / DIGIT / "_" / "." / "+" / "-" )
+ *   comment   = 1*64( printable ASCII minus "(" ")" )
+ *
+ * Tokens that fail to parse are dropped silently (no partial tokens kept).
+ * Returns `DEFAULT_BOT_AGENT` when the input is empty / all tokens dropped /
+ * the result exceeds the length cap after truncation.
+ */
+export function sanitizeBotAgent(raw: string | undefined): string {
+  if (!raw || typeof raw !== "string") return DEFAULT_BOT_AGENT;
+  const trimmed = raw.trim();
+  if (!trimmed) return DEFAULT_BOT_AGENT;
+
+  const productRe = /^[A-Za-z0-9_.\-]{1,32}\/[A-Za-z0-9_.+\-]{1,32}$/;
+  const commentCharRe = /^[\x20-\x27\x2A-\x7E]{1,64}$/;
+
+  // Tokenize on whitespace, but keep `(comment)` glued to the preceding product.
+  const rawTokens = trimmed.split(/\s+/);
+  const tokens: string[] = [];
+  for (let i = 0; i < rawTokens.length; i += 1) {
+    const tok = rawTokens[i] ?? "";
+    if (tok.startsWith("(") && !tok.endsWith(")")) {
+      let acc = tok;
+      while (i + 1 < rawTokens.length && !acc.endsWith(")")) {
+        i += 1;
+        acc += " " + (rawTokens[i] ?? "");
+      }
+      tokens.push(acc);
+    } else {
+      tokens.push(tok);
+    }
+  }
+
+  const accepted: string[] = [];
+  let pendingProduct: string | null = null;
+  for (const tok of tokens) {
+    if (tok.startsWith("(") && tok.endsWith(")")) {
+      const inner = tok.slice(1, -1);
+      if (pendingProduct && commentCharRe.test(inner)) {
+        accepted.push(`${pendingProduct} (${inner})`);
+        pendingProduct = null;
+      } else if (pendingProduct) {
+        accepted.push(pendingProduct);
+        pendingProduct = null;
+      }
+      continue;
+    }
+    if (pendingProduct) {
+      accepted.push(pendingProduct);
+      pendingProduct = null;
+    }
+    if (productRe.test(tok)) {
+      pendingProduct = tok;
+    }
+  }
+  if (pendingProduct) accepted.push(pendingProduct);
+
+  if (accepted.length === 0) return DEFAULT_BOT_AGENT;
+
+  const joined = accepted.join(" ");
+  if (Buffer.byteLength(joined, "utf-8") <= BOT_AGENT_MAX_LEN) return joined;
+
+  // Truncate by dropping trailing tokens until under the cap.
+  const truncated: string[] = [];
+  let len = 0;
+  for (const t of accepted) {
+    const add = (truncated.length === 0 ? 0 : 1) + Buffer.byteLength(t, "utf-8");
+    if (len + add > BOT_AGENT_MAX_LEN) break;
+    truncated.push(t);
+    len += add;
+  }
+  return truncated.length > 0 ? truncated.join(" ") : DEFAULT_BOT_AGENT;
+}
+
 export function randomWechatUin(): string {
   const uint32 = crypto.randomBytes(4).readUInt32BE(0);
   return Buffer.from(String(uint32), "utf8").toString("base64");

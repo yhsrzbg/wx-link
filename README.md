@@ -23,11 +23,18 @@ import { loginWithQR, WxLinkClient } from "wx-link";
 
 const login = await loginWithQR({
   onQRCode: (url) => console.log("Scan QR:", url),
+  // 可选：服务端要求配对码时回调，返回用户在手机微信上看到的数字
+  onVerifyCode: async ({ retry }) => {
+    console.log(retry ? "配对码不匹配，请重新输入" : "请输入手机微信显示的数字");
+    return await readLineFromSomewhere();
+  },
 });
 
 const client = new WxLinkClient({
   baseUrl: login.baseUrl,
   token: login.botToken,
+  // 可选：UA 风格的上游应用标识，作为 base_info.bot_agent 随每个请求发送
+  botAgent: "my-app/1.2.3 (prod)",
 });
 
 let cursor = "";

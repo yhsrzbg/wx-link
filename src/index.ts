@@ -28,6 +28,7 @@ export {
   pollQrStatus,
 } from "./auth.js";
 export { WxLinkClient } from "./client.js";
+export { buildClientVersion, sanitizeBotAgent, DEFAULT_BOT_AGENT } from "./utils.js";
 export {
   downloadRemoteMedia,
   uploadBufferToCdn,

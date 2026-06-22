@@ -4,6 +4,7 @@ import {
 } from "./constants.js";
 import type {
   ApiContext,
+  BaseInfo,
   ClientOptions,
   GetConfigResp,
   GetUpdatesResp,
@@ -15,6 +16,7 @@ import {
   randomWechatUin,
   redactToken,
   redactUrl,
+  sanitizeBotAgent,
 } from "./utils.js";
 
 const DEFAULT_LONG_POLL_TIMEOUT_MS = 35_000;
@@ -25,8 +27,8 @@ function ensureTrailingSlash(url: string): string {
   return url.endsWith("/") ? url : `${url}/`;
 }
 
-function buildBaseInfo(ctx: ApiContext): { channel_version: string } {
-  return { channel_version: ctx.channelVersion };
+function buildBaseInfo(ctx: ApiContext): BaseInfo {
+  return { channel_version: ctx.channelVersion, bot_agent: ctx.botAgent };
 }
 
 function buildCommonHeaders(ctx: ApiContext): Record<string, string> {
@@ -40,11 +42,14 @@ function buildCommonHeaders(ctx: ApiContext): Record<string, string> {
   return headers;
 }
 
-function buildHeaders(ctx: ApiContext, body: string): Record<string, string> {
+function buildHeaders(ctx: ApiContext): Record<string, string> {
+  // NOTE: do NOT set Content-Length manually. The undici fetch bundled with
+  // Node 24 rejects a pre-set Content-Length with
+  // `UND_ERR_INVALID_ARG: invalid content-length header`, which breaks every
+  // API call. Let fetch derive it from the request body.
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     AuthorizationType: "ilink_bot_token",
-    "Content-Length": String(Buffer.byteLength(body, "utf8")),
     "X-WECHAT-UIN": randomWechatUin(),
     ...buildCommonHeaders(ctx),
   };
@@ -63,6 +68,7 @@ export function createApiContext(options: ClientOptions | (Partial<ClientOptions
     routeTag: options.routeTag,
     appId: options.appId ?? DEFAULT_APP_ID,
     channelVersion: options.channelVersion ?? DEFAULT_CHANNEL_VERSION,
+    botAgent: sanitizeBotAgent(options.botAgent),
     clientVersionNumber: buildClientVersion(options.channelVersion ?? DEFAULT_CHANNEL_VERSION),
     longPollTimeoutMs: options.longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS,
     apiTimeoutMs: options.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS,
@@ -118,7 +124,7 @@ export async function apiPostFetch(params: {
   try {
     const response = await params.ctx.fetchImpl(url.toString(), {
       method: "POST",
-      headers: buildHeaders(params.ctx, params.body),
+      headers: buildHeaders(params.ctx),
       body: params.body,
       signal: controller.signal,
     });
